@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude Chat</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500&family=Sora:wght@300;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f0c1a 0%, #1a1030 40%, #0d1a2e 100%);
+      font-family: 'Noto Sans SC', sans-serif;
+      color: #e2d9f3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.3); border-radius: 2px; }
+
+    /* AUTH */
+    #auth-container {
+      width: 100%;
+      max-width: 400px;
+      padding: 20px;
+    }
+    .auth-box {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 24px;
+      padding: 40px 36px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+    }
+    .auth-logo {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: linear-gradient(135deg, #7c3aed, #a78bfa);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; margin: 0 auto 20px;
+      box-shadow: 0 0 20px rgba(124,58,237,0.4);
+    }
+    .auth-title {
+      font-family: 'Sora', sans-serif;
+      font-size: 22px; font-weight: 600;
+      text-align: center; margin-bottom: 6px;
+    }
+    .auth-sub {
+      font-size: 13px; color: #7c6fa0;
+      text-align: center; margin-bottom: 32px;
+    }
+    .auth-tabs {
+      display: flex; gap: 4px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 12px; padding: 4px;
+      margin-bottom: 24px;
+    }
+    .auth-tab {
+      flex: 1; padding: 8px;
+      border: none; border-radius: 9px;
+      font-size: 13px; cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Noto Sans SC', sans-serif;
+    }
+    .auth-tab.active {
+      background: linear-gradient(135deg, #7c3aed, #6d28d9);
+      color: #fff;
+    }
+    .auth-tab:not(.active) {
+      background: transparent; color: #7c6fa0;
+    }
+    .auth-input {
+      width: 100%; padding: 12px 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; color: #e2d9f3;
+      font-size: 14px; font-family: 'Noto Sans SC', sans-serif;
+      margin-bottom: 12px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .auth-input:focus { border-color: rgba(167,139,250,0.5); }
+    .auth-input::placeholder { color: rgba(255,255,255,0.25); }
+    .auth-btn {
+      width: 100%; padding: 13px;
+      background: linear-gradient(135deg, #7c3aed, #a78bfa);
+      border: none; border-radius: 12px;
+      color: #fff; font-size: 15px; font-weight: 500;
+      cursor: pointer; margin-top: 4px;
+      font-family: 'Noto Sans SC', sans-serif;
+      box-shadow: 0 4px 15px rgba(124,58,237,0.4);
+      transition: opacity 0.2s;
+    }
+    .auth-btn:hover { opacity: 0.9; }
+    .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .auth-msg {
+      font-size: 13px; text-align: center;
+      margin-top: 12px; min-height: 20px;
+    }
+    .auth-msg.error { color: #f87171; }
+    .auth-msg.success { color: #34d399; }
+
+    /* CHAT */
+    #chat-container {
+      display: none;
+      width: 100%;
+      max-width: 700px;
+      padding: 20px;
+      flex-direction: column;
+      height: 100vh;
+      justify-content: center;
+    }
+    .chat-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px; padding: 0 4px;
+    }
+    .chat-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, #7c3aed, #a78bfa);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .chat-name { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 16px; }
+    .chat-status { font-size: 11px; color: #7c6fa0; }
+    .logout-btn {
+      margin-left: auto; padding: 6px 14px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; color: #7c6fa0;
+      font-size: 12px; cursor: pointer;
+      font-family: 'Noto Sans SC', sans-serif;
+      transition: all 0.2s;
+    }
+    .logout-btn:hover { color: #e2d9f3; border-color: rgba(255,255,255,0.2); }
+    .chat-window {
+      flex: 1;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 24px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+      max-height: 75vh;
+    }
+    .messages {
+      flex: 1; overflow-y: auto;
+      padding: 24px 20px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .msg { display: flex; animation: fadeIn 0.3s ease-out; }
+    .msg.user { justify-content: flex-end; }
+    .msg.assistant { justify-content: flex-start; }
+    .bubble {
+      max-width: 75%; padding: 12px 16px;
+      font-size: 14px; line-height: 1.65;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .msg.user .bubble {
+      background: linear-gradient(135deg, #7c3aed, #6d28d9);
+      border-radius: 18px 18px 4px 18px;
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(124,58,237,0.3);
+    }
+    .msg.assistant .bubble {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px 18px 18px 4px;
+      color: #d4c9f0;
+    }
+    .divider { height: 1px; background: rgba(255,255,255,0.05); }
+    .input-area {
+      padding: 14px 16px;
+      display: flex; align-items: flex-end; gap: 10px;
+    }
+    #msg-input {
+      flex: 1; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px; padding: 10px 14px;
+      color: #e2d9f3; font-size: 14px;
+      font-family: 'Noto Sans SC', sans-serif;
+      resize: none; outline: none;
+      min-height: 42px; max-height: 120px;
+      transition: border-color 0.2s; line-height: 1.5;
+    }
+    #msg-input:focus { border-color: rgba(167,139,250,0.5); }
+    #msg-input::placeholder { color: rgba(255,255,255,0.25); }
+    #send-btn {
+      width: 42px; height: 42px; border-radius: 12px;
+      border: none; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0; transition: all 0.2s;
+    }
+    #send-btn.active {
+      background: linear-gradient(135deg, #7c3aed, #a78bfa);
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(124,58,237,0.4);
+    }
+    #send-btn.inactive {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.25);
+      cursor: not-allowed;
+    }
+    .typing-dots {
+      display: flex; align-items: center; gap: 5px;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px 18px 18px 4px;
+      width: fit-content;
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #a78bfa;
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    .hint { margin-top: 10px; font-size: 11px; color: rgba(255,255,255,0.15); text-align: center; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes bounce { 0%,80%,100% { transform:translateY(0); opacity:0.4; } 40% { transform:translateY(-6px); opacity:1; } }
+  </style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-container">
+  <div class="auth-box">
+    <div class="auth-logo">✦</div>
+    <div class="auth-title">Claude Chat</div>
+    <div class="auth-sub">登录后开始与 Claude 对话</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">登录</button>
+      <button class="auth-tab" id="tab-register" onclick="switchTab('register')">注册</button>
+    </div>
+    <input class="auth-input" id="auth-email" type="email" placeholder="邮箱地址" />
+    <input class="auth-input" id="auth-password" type="password" placeholder="密码" />
+    <button class="auth-btn" id="auth-btn" onclick="handleAuth()">登录</button>
+    <div class="auth-msg" id="auth-msg"></div>
+  </div>
+</div>
+
+<!-- CHAT -->
+<div id="chat-container">
+  <div class="chat-header">
+    <div class="chat-avatar">✦</div>
+    <div>
+      <div class="chat-name">Claude</div>
+      <div class="chat-status" id="user-email-display"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+      <div style="width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399;"></div>
+      <span style="font-size:11px;color:#6b7280;">在线</span>
+    </div>
+    <button class="logout-btn" onclick="logout()">退出</button>
+  </div>
+  <div class="chat-window">
+    <div class="messages" id="messages"></div>
+    <div class="divider"></div>
+    <div class="input-area">
+      <textarea id="msg-input" rows="1" placeholder="发消息给 Claude..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button id="send-btn" class="inactive" onclick="sendMessage()">↑</button>
+    </div>
+  </div>
+  <div class="hint">按 Enter 发送 · Shift+Enter 换行</div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://oneylkxpqsmvlotonwdx.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_YNgS6uB2lwfuK925MIb3vA_7nG02vYF';
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const SYSTEM_PROMPT = `你是Claude，一个聪明、友善、有趣的AI助手。用中文和用户交流，语气自然亲切。`;
+
+  let currentUser = null;
+  let chatHistory = [];
+  let isLogin = true;
+
+  // Init
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (session?.user) {
+      currentUser = session.user;
+      showChat();
+    } else {
+      currentUser = null;
+      showAuth();
+    }
+  });
+
+  function switchTab(tab) {
+    isLogin = tab === 'login';
+    document.getElementById('tab-login').className = 'auth-tab' + (isLogin ? ' active' : '');
+    document.getElementById('tab-register').className = 'auth-tab' + (!isLogin ? ' active' : '');
+    document.getElementById('auth-btn').textContent = isLogin ? '登录' : '注册';
+    document.getElementById('auth-msg').textContent = '';
+  }
+
+  async function handleAuth() {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const btn = document.getElementById('auth-btn');
+    const msg = document.getElementById('auth-msg');
+    if (!email || !password) { msg.className='auth-msg error'; msg.textContent='请填写邮箱和密码'; return; }
+    btn.disabled = true;
+    msg.className = 'auth-msg'; msg.textContent = '处理中...';
+    let error;
+    if (isLogin) {
+      ({ error } = await sb.auth.signInWithPassword({ email, password }));
+    } else {
+      ({ error } = await sb.auth.signUp({ email, password }));
+    }
+    btn.disabled = false;
+    if (error) { msg.className='auth-msg error'; msg.textContent = error.message; }
+    else if (!isLogin) { msg.className='auth-msg success'; msg.textContent='注册成功！请登录'; switchTab('login'); }
+  }
+
+  async function logout() {
+    await sb.auth.signOut();
+  }
+
+  async function showChat() {
+    document.getElementById('auth-container').style.display = 'none';
+    const cc = document.getElementById('chat-container');
+    cc.style.display = 'flex';
+    document.getElementById('user-email-display').textContent = currentUser.email;
+    await loadHistory();
+  }
+
+  function showAuth() {
+    document.getElementById('auth-container').style.display = 'block';
+    document.getElementById('chat-container').style.display = 'none';
+    chatHistory = [];
+  }
+
+  async function loadHistory() {
+    const { data } = await sb.from('messages').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true });
+    const container = document.getElementById('messages');
+    container.innerHTML = '';
+    chatHistory = [];
+    if (data && data.length > 0) {
+      for (const m of data) {
+        chatHistory.push({ role: m.role, content: m.content });
+        appendBubble(m.role, m.content);
+      }
+    } else {
+      appendBubble('assistant', '你好！我是 Claude，有什么想聊的？😊');
+    }
+    scrollBottom();
+  }
+
+  function appendBubble(role, content) {
+    const container = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    div.innerHTML = `<div class="bubble">${escapeHtml(content)}</div>`;
+    container.appendChild(div);
+    scrollBottom();
+  }
+
+  function showTyping() {
+    const container = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'msg assistant'; div.id = 'typing';
+    div.innerHTML = `<div class="typing-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+    container.appendChild(div);
+    scrollBottom();
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('typing');
+    if (t) t.remove();
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById('msg-input');
+    const text = input.value.trim();
+    if (!text || !currentUser) return;
+    input.value = ''; autoResize(input); updateSendBtn();
+
+    chatHistory.push({ role: 'user', content: text });
+    appendBubble('user', text);
+    await sb.from('messages').insert({ user_id: currentUser.id, role: 'user', content: text });
+
+    showTyping();
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: chatHistory
+        })
+      });
+      const data = await res.json();
+      const reply = data.content?.map(b => b.text || '').join('') || '（没有收到回复）';
+      removeTyping();
+      chatHistory.push({ role: 'assistant', content: reply });
+      appendBubble('assistant', reply);
+      await sb.from('messages').insert({ user_id: currentUser.id, role: 'assistant', content: reply });
+    } catch (e) {
+      removeTyping();
+      appendBubble('assistant', '出错了，请稍后再试 😅');
+    }
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    updateSendBtn();
+  }
+
+  function updateSendBtn() {
+    const btn = document.getElementById('send-btn');
+    const val = document.getElementById('msg-input').value.trim();
+    btn.className = val ? 'active' : 'inactive';
+  }
+
+  function scrollBottom() {
+    const c = document.getElementById('messages');
+    c.scrollTop = c.scrollHeight;
+  }
+
+  function escapeHtml(t) {
+    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  }
+</script>
+</body>
+</html>
